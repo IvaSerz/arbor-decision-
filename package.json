@@ -1,6 +1,6 @@
 {
   "name": "forest-decision",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@electron/osx-sign": "^2.7.2",
     "@electron/packager": "^20.3.0",
     "@playwright/test": "^1.50.0",
     "@tauri-apps/cli": "^2.0.0",

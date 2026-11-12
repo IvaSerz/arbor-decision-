@@ -18,7 +18,7 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: arm64
-          - os: macos-latest
+          - os: macos-15-intel
             platform: darwin
             arch: x64
     runs-on: ${{ matrix.os }}
@@ -35,6 +35,21 @@ jobs:
       - name: Archive macOS app preserving symlinks
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent release/Arbor-darwin-${{ matrix.arch }}/Arbor.app release/Arbor-macOS-${{ matrix.arch }}.zip
+      - name: Verify and launch extracted macOS application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p diagnostics/extracted
+          ditto -x -k release/Arbor-macOS-${{ matrix.arch }}.zip diagnostics/extracted
+          codesign --verify --deep --strict --verbose=4 diagnostics/extracted/Arbor.app
+          node scripts/native-smoke.mjs diagnostics/extracted/Arbor.app/Contents/MacOS/Arbor diagnostics/native
+      - name: Upload native test report
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Native-test-${{ matrix.arch }}
+          path: diagnostics/native
+          if-no-files-found: ignore
       - name: Archive Windows directory
         if: runner.os == 'Windows'
         shell: pwsh
