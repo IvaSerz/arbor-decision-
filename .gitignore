@@ -11,3 +11,4 @@ portable/
 .env.*
 !.env.example
 .DS_Store
+diagnostics/

@@ -1,0 +1,50 @@
+name: Diagnose released Apple Silicon app
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Download actual release archive and inspect
+        run: |
+          mkdir -p diagnostics/original
+          gh release download v0.1.0 -p Arbor-macOS-arm64.zip -p SHA256SUMS.txt -D diagnostics/original
+          cd diagnostics/original
+          grep 'Arbor-macOS-arm64.zip' SHA256SUMS.txt | shasum -a 256 -c -
+          ditto -x -k Arbor-macOS-arm64.zip .
+          file Arbor.app/Contents/MacOS/Arbor
+          codesign --verify --deep --strict --verbose=4 Arbor.app > signature.txt 2>&1 || true
+          cat signature.txt
+          codesign -d --verbose=4 Arbor.app 2>&1 | tee signature-details.txt
+          spctl --assess --type execute --verbose=4 Arbor.app > gatekeeper.txt 2>&1 || true
+          cat gatekeeper.txt
+      - name: Launch released app without modification
+        continue-on-error: true
+        run: node scripts/native-smoke.mjs diagnostics/original/Arbor.app/Contents/MacOS/Arbor diagnostics/original-smoke
+      - name: Re-sign copy with ad-hoc identity
+        run: |
+          ditto diagnostics/original/Arbor.app diagnostics/Arbor.app
+          node scripts/adhoc-sign.mjs diagnostics/Arbor.app
+          codesign --verify --deep --strict --verbose=4 diagnostics/Arbor.app
+      - name: Launch re-signed app
+        run: node scripts/native-smoke.mjs diagnostics/Arbor.app/Contents/MacOS/Arbor diagnostics/resigned-smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: AppleSilicon-diagnostics
+          path: |
+            diagnostics/**/*.json
+            diagnostics/**/*.txt
+            diagnostics/**/*.png
+          retention-days: 14
