@@ -1,0 +1,46 @@
+name: Publish prerelease
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Desktop builds workflow run ID
+        required: true
+      tag:
+        description: Release tag
+        required: true
+        default: v0.1.0
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN: ${{ inputs.run_id }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate build run
+        id: source
+        shell: bash
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN" > /tmp/build.json
+          jq -e '.conclusion == "success" and .name == "Desktop builds" and .event == "push" and .head_branch == "main"' /tmp/build.json
+          echo "sha=$(jq -r .head_sha /tmp/build.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          pattern: Arbor-*
+          merge-multiple: true
+          path: release
+      - name: Publish unsigned prototype
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        shell: bash
+        run: |
+          test "$(find release -maxdepth 1 -name '*.zip' | wc -l)" -eq 3
+          (cd release && sha256sum *.zip > SHA256SUMS.txt)
+          gh release create "$RELEASE_TAG" --target "$SOURCE_SHA" --prerelease --title "Arbor $RELEASE_TAG — предварительный прототип" --notes-file docs/release-notes.md release/*.zip release/SHA256SUMS.txt
