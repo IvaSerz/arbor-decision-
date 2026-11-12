@@ -1,0 +1,46 @@
+name: Desktop builds
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:portable
+      - run: node scripts/desktop-package.mjs ${{ matrix.platform }} ${{ matrix.arch }}
+      - name: Archive macOS app preserving symlinks
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent release/Arbor-darwin-${{ matrix.arch }}/Arbor.app release/Arbor-macOS-${{ matrix.arch }}.zip
+      - name: Archive Windows directory
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path release/Arbor-win32-x64 -DestinationPath release/Arbor-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Arbor-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/*.zip
+          retention-days: 14

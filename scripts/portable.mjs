@@ -1,0 +1,16 @@
+import {readFile,writeFile,readdir,mkdir} from 'node:fs/promises';
+const assets=await readdir('dist/assets');
+const main=assets.find(n=>/^index-.*\.js$/.test(n));
+const css=assets.find(n=>/^index-.*\.css$/.test(n));
+const worker=assets.find(n=>/^plugin-worker-.*\.js$/.test(n));
+let js=await readFile(`dist/assets/${main}`,'utf8');
+const workerCode=await readFile(`dist/assets/${worker}`,'utf8');
+const target=`new URL("/assets/${worker}",import.meta.url)`;
+if(!js.includes(target))throw Error('Worker reference changed: update portable bundler');
+js=js.replace(target,`URL.createObjectURL(new Blob([${JSON.stringify(workerCode)}],{type:"text/javascript"}))`);
+js=js.replace('type:"text/javascript"})),{type:"module"}', 'type:"text/javascript"})),{type:"classic"}');
+const styles=await readFile(`dist/assets/${css}`,'utf8');
+await mkdir('portable',{recursive:true});
+await writeFile('portable/Arbor.html',`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Arbor — портативная версия</title><style>${styles}</style></head><body><div id="root"></div><script type="module">${js.replaceAll('</script','<\\/script')}</script></body></html>`);
+await writeFile('portable/ИНСТРУКЦИЯ.txt',`ARBOR — ПОРТАТИВНЫЙ ПРОТОТИП 0.1\n\n1. Откройте Arbor.html двойным щелчком в современном браузере (Edge, Chrome, Firefox или Safari).\n2. Интернет, установка библиотек, Node.js и Rust не нужны.\n3. Для переноса данных нажмите «Сохранить проект» и перенесите JSON вместе с Arbor.html. На другом компьютере нажмите «Открыть».\n4. Автосохранение привязано к браузеру и расположению файла. Перед перемещением файла, сменой браузера или очисткой данных обязательно экспортируйте проект.\n5. PDF: «PDF-отчёт» → «Сохранить как PDF» в диалоге печати.\n\nЭто браузерная портативная версия, а не нативные EXE/APP. Используются учебные данные. Экспериментальные WASM-плагины не сохраняются между запусками; таймаут 2 секунды, лимит памяти пока не реализован.\n\nПроверено открытие файла в Chromium. Edge, Firefox и Safari, а также Windows и macOS требуют отдельной проверки.\n`);
+console.log('Created portable/Arbor.html');
